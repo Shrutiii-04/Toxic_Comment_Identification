@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Toxic Comment Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style4.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <h1>Toxic Comment Identification Dashboard</h1>
+        <div class="toggle-container">
+            <label class="switch">
+                <input type="checkbox" id="themeToggle">
+                <span class="slider round"></span>
+            </label>
+        </div>
+    </header>
+
+    <main class="dashboard">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <h3>Navigation</h3>
+            <button class="tab-btn active" data-tab="single">Single Comment</button>
+            <button class="tab-btn" data-tab="batch">CSV Batch</button>
+        </aside>
+
+        <!-- Content Area -->
+        <section class="content">
+
+            <!-- Single Comment -->
+            <div class="tab-content" id="single">
+                <div class="card glass">
+                    <h2>Single Comment Analysis</h2>
+                    <form method="POST" id="singleForm">
+                        <textarea name="comment" placeholder="Enter your comment here..." rows="5">{{ comment }}</textarea>
+                        <div class="button-row">
+                            <button type="submit" name="action" value="analyze">Analyze</button>
+                            <button type="button" id="clearBtn">Clear</button>
+                        </div>
+                    </form>
+                </div>
+
+                {% if result %}
+                <div class="results-container">
+                    <div class="card glass fade-in">
+                        <h3>Prediction Results</h3>
+                        <table>
+                            <tr><th>Category</th><th>Probability</th></tr>
+                            {% for label, score in result.items() %}
+                            <tr>
+                                <td>{{ label }}</td>
+                                <td style="color: {{ 'red' if score > 0.7 else 'orange' if score > 0.3 else 'green' }}">{{ score }}</td>
+                            </tr>
+                            {% endfor %}
+                        </table>
+                        <p class="overall {{ color }}">{{ overall }}</p>
+                    </div>
+
+                    <div class="card glass fade-in">
+                        <h3>Prediction Chart</h3>
+                        <canvas id="predictionChart"></canvas>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Batch Analysis -->
+            <div class="tab-content" id="batch" style="display:none;">
+                <div class="card glass">
+                    <h2>Batch Analysis via CSV</h2>
+                    <form method="POST" enctype="multipart/form-data" id="csvForm">
+                        <input type="file" name="csv_file" accept=".csv" required>
+                        <button type="submit" name="action" value="upload_csv">Upload & Analyze</button>
+                    </form>
+                </div>
+
+                {% if csv_results %}
+                <div class="card glass fade-in">
+                    <h3>CSV Batch Analysis Completed5+6</h3>
+                    <p>{{ overall }}</p>
+                    <a href="{{ url_for('static', filename='analysis_results.csv') }}" download class="download-btn">⬇ Download CSV</a>
+                </div>
+
+                <div class="chart-row">
+                    <div class="card glass fade-in">
+                        <h3>Summary Bar Chart</h3>
+                        <canvas id="csvChart"></canvas>
+                    </div>
+                    <div class="card glass fade-in">
+                        <h3>Distribution Pie Chart</h3>
+                        <canvas id="csvPieChart"></canvas>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </section>
+    </main>
+
+    <!-- Loading Spinner -->
+    <div id="loadingOverlay">
+        <div class="spinner"></div>
+        <p>Analyzing... Please wait.</p>
+    </div>
+
+    <!-- JS -->
+    <script>
+    // --- Tab Navigation ---
+    const buttons = document.querySelectorAll('.tab-btn');
+    const contents = document.querySelectorAll('.tab-content');
+    buttons.forEach(btn => {
+        btn.addEventListener('click', () => {
+            contents.forEach(c => c.style.display = 'none');
+            document.getElementById(btn.dataset.tab).style.display = 'block';
+            buttons.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+        });
+    });
+
+    // --- Clear Button ---
+    const clearBtn = document.getElementById("clearBtn");
+    const commentBox = document.querySelector("textarea[name='comment']");
+    clearBtn?.addEventListener("click", () => { commentBox.value = ""; });
+
+    // --- Loading Animation ---
+    const overlay = document.getElementById("loadingOverlay");
+    document.querySelectorAll("form").forEach(f => {
+        f.addEventListener("submit", () => overlay.style.display = "flex");
+    });
+
+    // --- Theme Toggle ---
+    const toggle = document.getElementById('themeToggle');
+    toggle.addEventListener('change', () => {
+        document.body.classList.toggle('dark-mode');
+    });
+
+    // --- Charts ---
+    {% if predictions %}
+    new Chart(document.getElementById('predictionChart'), {
+        type: 'bar',
+        data: {
+            labels: {{ categories|tojson }},
+            datasets: [{
+                label: 'Probability',
+                data: {{ predictions|tojson }},
+                backgroundColor: [
+                'rgba(0, 128, 0, 0.6)',
+                'rgba(255, 165, 0, 0.6)',
+                'rgba(255, 0, 0, 0.6)',
+                'rgba(255, 99, 132, 0.6)',
+                'rgba(54, 162, 235, 0.6)',
+                'rgba(153, 102, 255, 0.6)'
+            ],
+            borderColor: [
+                'rgba(0, 128, 0, 1)',
+                'rgba(255, 165, 0, 1)',
+                'rgba(255, 0, 0, 1)',
+                'rgba(255, 99, 132, 1)',
+                'rgba(54, 162, 235, 1)',
+                'rgba(153, 102, 255, 1)'
+            ],
+                borderWidth: 1
+            }]
+        },
+        options: { scales: { y: { beginAtZero: true, max: 1 } } }
+    });
+    {% endif %}
+
+    {% if chart_labels %}
+    new Chart(document.getElementById('csvChart'), {
+        type: 'bar',
+        data: {
+            labels: {{ chart_labels|tojson }},
+            datasets: [{
+                label: 'Comment Count',
+                data: {{ chart_values|tojson }},
+                backgroundColor: [
+                    'rgba(40, 167, 69, 0.6)',
+                    'rgba(255, 193, 7, 0.6)',
+                    'rgba(220, 53, 69, 0.6)'
+                ]
+            }]
+        },
+        options: { scales: { y: { beginAtZero: true } } }
+    });
+
+    new Chart(document.getElementById('csvPieChart'), {
+        type: 'pie',
+        data: {
+            labels: {{ chart_labels|tojson }},
+            datasets: [{
+                data: {{ chart_values|tojson }},
+                backgroundColor: [
+                    'rgba(40, 167, 69, 0.8)',
+                    'rgba(255, 193, 7, 0.8)',
+                    'rgba(220, 53, 69, 0.8)'
+                ]
+            }]
+        }
+    });
+    {% endif %}
+    </script>
+</body>
+</html>
